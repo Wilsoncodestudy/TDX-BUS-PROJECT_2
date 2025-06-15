@@ -1,47 +1,26 @@
-@import "tailwindcss";
-
-:root {
-  --background: #fffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-/* 重置一些基本樣式 */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  line-height: 1.5;
+  line-height: 1.6; /* 增加行高 */
+  padding: 20px; /* 增加頁面內部的間距 */
 }
 
 h1, h2, h3, h4, h5, h6 {
-  margin-bottom: 1rem;
-}
-
-a {
-  color: inherit; /* 繼承文字顏色 */
-  text-decoration: none; /* 去掉下劃線 */
+  margin-bottom: 1.5rem; /* 增加標題下方的間距 */
 }
 
 button {
   cursor: pointer; /* 鼠標指針變為手型 */
+  padding: 10px 15px; /* 增加按鈕的內邊距 */
+  border-radius: 8px; /* 增加按鈕的圓角 */
+  background-color: #007bff; /* 設置按鈕背景顏色為藍色 */
+  color: white; /* 設置按鈕文字顏色為白色 */
+  border: none; /* 去掉按鈕邊框 */
+  transition: background-color 0.3s; /* 增加背景顏色過渡效果 */
 }
+
+button:hover {
+  background-color: #0056b3; /* 懸停時改變按鈕顏色 */
+}
+
