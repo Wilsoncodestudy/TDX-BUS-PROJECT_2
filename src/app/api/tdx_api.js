@@ -1,4 +1,4 @@
-import axios from 'axios';
+/*import axios from 'axios';
 
 const TDX_CLIENT_ID = process.env.TDX_CLIENT_ID;
 const TDX_CLIENT_SECRET = process.env.TDX_CLIENT_SECRET;
@@ -82,4 +82,66 @@ export const testGetFare = async () => {
   } catch (err) {
     console.error('🚫 查詢錯誤:', err?.response?.data || err.message);
   }
+};*/
+import axios from 'axios';
+
+const TDX_CLIENT_ID = process.env.TDX_CLIENT_ID;
+const TDX_CLIENT_SECRET = process.env.TDX_CLIENT_SECRET;
+
+const getAccessToken = async () => {
+  try {
+    const response = await axios.post(
+      'https://tdx.transportdata.tw/auth/realms/TDXConnect/protocol/openid-connect/token',
+      new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: TDX_CLIENT_ID,
+        client_secret: TDX_CLIENT_SECRET,
+      }),
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      }
+    );
+
+    return response.data.access_token;
+  } catch (error) {
+    console.error('取得存取權杖失敗:', error.response ? error.response.data : error.message);
+    throw error;
+  }
 };
+
+const getTHSRStations = async () => {
+  const token = await getAccessToken();
+  const response = await axios.get('https://tdx.transportdata.tw/api/basic/v2/Rail/THSR/Station', {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return response.data;
+};
+
+const getTHSRGeneralTimetable = async () => {
+  const token = await getAccessToken();
+
+  try {
+    const response = await axios.get(
+      'https://tdx.transportdata.tw/api/basic/v2/Rail/THSR/GeneralTimetable?$format=JSON',
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    console.log("GeneralTimetable 資料量:", response.data.length);
+    return response.data;
+  } catch (error) {
+    console.error("❌ GeneralTimetable 請求失敗:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export { getTHSRStations, getTHSRGeneralTimetable };
+

@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -5,10 +6,6 @@ import ModernCard from '../components/ModernCard';
 
 const TRA_DESTINATIONS = [
   "基隆", "南港", "台北", "板橋", "桃園", "新竹", "苗栗", "台中", "彰化", "員林", "嘉義", "台南", "高雄", "屏東", "台東", "花蓮", "宜蘭"
-];
-
-const HSR_DESTINATIONS = [
-  "南港", "台北", "板橋", "桃園", "新竹", "苗栗", "台中", "彰化", "雲林", "嘉義", "台南", "左營"
 ];
 
 const busScheduleBack101 = [
@@ -27,8 +24,14 @@ const addMinutes = (timeStr, mins) => {
   let total = hh * 60 + mm + mins;
   let h = Math.floor(total / 60) % 24;
   let m = total % 60;
-  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+  return h.toString().padStart(2, '0') + ':' + m.toString().padStart(2, '0');
 };
+
+const timeToMinutes = (str) => {
+  const [h, m] = str.split(':').map(Number);
+  return h * 60 + m;
+};
+
 
 const formatTravelTime = (startTime, endTime) => {
   const [sh, sm] = startTime.split(':').map(Number);
@@ -42,7 +45,7 @@ const formatTravelTime = (startTime, endTime) => {
   const h = Math.floor(diff / 60);
   const m = diff % 60;
 
-  return `${h}h ${m}m`;
+  return h + 'h ' + m + 'm';
 };
 
 const getColorBasedOnTimeDifference = (userTime, busDeparture) => {
@@ -87,119 +90,149 @@ export default function Home() {
   const [currentPage, setCurrentPage] = useState(1);
   const [traData, setTraData] = useState({});
   const [hsrStations, setHsrStations] = useState([]);
+  const [thsrTimetable, setThsrTimetable] = useState([]);
 
   const itemsPerPage = 15;
 
-  useEffect(() => {
-    fetch('/data/tra.json')
-      .then(res => res.json())
-      .then(data => setTraData(data));
+useEffect(() => {
+  fetch('/data/tra.json')
+    .then(res => res.json())
+    .then(data => setTraData(data));
 
-    (async () => {
-      try {
-        const res = await fetch('/api/thsrStations');
-        const stations = await res.json();
-        setHsrStations(stations);
-      } catch (error) {
-        console.error(error);
+  (async () => {
+    try {
+      const [stationsRes, timetableRes] = await Promise.all([
+        fetch('/api/thsrStations'),
+        fetch('/api/thsrTimetable'),
+      ]);
+
+      if (!stationsRes.ok || !timetableRes.ok) throw new Error('API 錯誤');
+
+      const stations = await stationsRes.json();
+      const timetable = await timetableRes.json();
+
+      if (!Array.isArray(stations)) {
+        console.error('❌ 高鐵站資料格式錯誤', stations);
+        return;
       }
-    })();
-  }, []);
+
+      if (!Array.isArray(timetable)) {
+        console.error('❌ 高鐵時刻表資料格式錯誤', timetable);
+        return;
+      }
+
+      setHsrStations(stations);
+      setThsrTimetable(timetable);
+
+      console.log('✅ 高鐵站:', stations);
+      console.log('✅ GeneralTimetable 條目數:', timetable.length);
+    } catch (error) {
+      console.error('載入高鐵資料失敗:', error);
+    }
+  })();
+}, []);
+
 
   const findAllTrainsAfter = (arriveTrainTime, dest) => {
     const trains = traData[dest] || [];
     return trains.filter(train => train.DepartureTime >= arriveTrainTime);
   };
 
-  const onSearch = async () => {
-    if (!time) {
-      alert('請確定時間');
-      return;
-    }
-
-    const filtered101 = filterSchedules(time, busScheduleBack101);
-    const filtered201 = filterSchedules(time, busScheduleBack201);
-    const formattedResults = [];
-
-    if (transportRoute === 'bus-to-train') {
-      filtered101.forEach(depTime => {
-        const { arriveYunKe, arriveTrain } = calcStopTimes(depTime, '101');
-        const trains = findAllTrainsAfter(arriveTrain, destination);
-        if (trains.length > 0) {
-          const train = trains[0];
-          const color = getColorBasedOnTimeDifference(time, depTime);
-          const travelTime = formatTravelTime(depTime, train.ArrivalTime);
-          formattedResults.push(
-            <li key={`101-${depTime}`} style={{ color }}>
-              101號公車 - 雲科大發車: {depTime}，抵達斗六火車站: {arriveTrain}<br />
-              建議搭乘火車 {train.TrainNo}，發車時間: {train.DepartureTime}，抵達 {destination} 車站: {train.ArrivalTime}，票價: {train.Price}，車程: {travelTime}
-            </li>
-          );
-        }
-      });
-
-      filtered201.forEach(depTime => {
-        const { arriveTrain } = calcStopTimes(depTime, '201');
-        const trains = findAllTrainsAfter(arriveTrain, destination);
-        if (trains.length > 0) {
-          const train = trains[0];
-          const color = getColorBasedOnTimeDifference(time, depTime);
-          const travelTime = formatTravelTime(depTime, train.ArrivalTime);
-          formattedResults.push(
-            <li key={`201-${depTime}`} style={{ color }}>
-              201號公車 - 雲科大發車: {depTime}，抵達斗六火車站: {arriveTrain}<br />
-              建議搭乘火車 {train.TrainNo}，發車時間: {train.DepartureTime}，抵達 {destination} 車站: {train.ArrivalTime}，票價: {train.Price}，車程: {travelTime}
-            </li>
-          );
-        }
-      });
-    } else if (transportRoute === 'bus-to-hsr') {
-      for (const depTime of filtered201) {
-        const { arriveHSR } = calcStopTimes(depTime, '201');
-        try {
-          const fareResponse = await fetch(`/api/thsrFare?from=Yunlin&to=${destination}`);
-          const fareData = await fareResponse.json();
-
-          const timetableResponse = await fetch(`/api/thsrTimetable?arriveTime=${arriveHSR}&destination=${destination}`);
-          const timetableData = await timetableResponse.json();
-
-          if (Array.isArray(timetableData)) {
-            const availableTrains = timetableData.filter(train =>
-              train.ArrivalTime >= arriveHSR &&
-              train.Origin === '雲林' &&
-              train.Destination === destination
-            );
-
-            if (availableTrains.length > 0) {
-              const train = availableTrains[0];
-              const color = getColorBasedOnTimeDifference(time, depTime);
-              const travelTime = formatTravelTime(depTime, train.ArrivalTime);
-
-              formattedResults.push(
-                <li key={`hsr-${depTime}`} style={{ color }}>
-                  201號公車 - 雲科大發車: {depTime}，抵達雲林高鐵站: {arriveHSR}<br />
-                  建議搭乘高鐵 {train.TrainNo}，發車時間: {train.DepartureTime}，抵達 {destination} 車站: {train.ArrivalTime}，票價: {fareData.price}，車程: {travelTime}
-                </li>
-              );
-            }
-          } else {
-            console.error('timetableData 不是陣列!', timetableData);
-          }
-        } catch (error) {
-          console.error(error);
-        }
-      }
-    }
-
-    if (formattedResults.length === 0) {
-      setResults([<li key="no-data">當日無後續車次</li>]);
-    } else {
-      setResults(formattedResults);
-    }
-    setCurrentPage(1);
+  const extractDepartureTimeFromTimetable = (stopTimes, stationName) => {
+    const stop = stopTimes.find(s => s.StationName.Zh_tw === stationName);
+    return stop?.DepartureTime || stop?.ArrivalTime || null;
   };
 
-  // 分頁處理
+const onSearch = async () => {
+  if (!time) {
+    alert('請確定時間');
+    return;
+  }
+
+  const filtered101 = filterSchedules(time, busScheduleBack101);
+  const filtered201 = filterSchedules(time, busScheduleBack201);
+  const formattedResults = [];
+
+  // 🔹 公車 ➜ 火車邏輯
+  if (transportRoute === 'bus-to-train') {
+    filtered101.forEach(depTime => {
+      const { arriveYunKe, arriveTrain } = calcStopTimes(depTime, '101');
+      const trains = findAllTrainsAfter(arriveTrain, destination);
+      if (trains.length > 0) {
+        const train = trains[0];
+        const color = getColorBasedOnTimeDifference(time, depTime);
+        const travelTime = formatTravelTime(depTime, train.ArrivalTime);
+        formattedResults.push(
+          <li key={'101-' + depTime} style={{ color }}>
+            101號公車 - 雲科大發車: {depTime}，抵達斗六火車站: {arriveTrain}<br />
+            搭乘火車 {train.TrainNo}，發車: {train.DepartureTime}，抵達 {destination}: {train.ArrivalTime}，票價: {train.Price + 20} 元，車程: {travelTime}
+          </li>
+        );
+      }
+    });
+
+    filtered201.forEach(depTime => {
+      const { arriveTrain } = calcStopTimes(depTime, '201');
+      const trains = findAllTrainsAfter(arriveTrain, destination);
+      if (trains.length > 0) {
+        const train = trains[0];
+        const color = getColorBasedOnTimeDifference(time, depTime);
+        const travelTime = formatTravelTime(depTime, train.ArrivalTime);
+        formattedResults.push(
+          <li key={'201-' + depTime} style={{ color }}>
+            201號公車 - 雲科大發車: {depTime}，抵達斗六火車站: {arriveTrain}<br />
+            搭乘火車 {train.TrainNo}，發車: {train.DepartureTime}，抵達 {destination}: {train.ArrivalTime}，票價: {train.Price + 20} 元，車程: {travelTime}
+          </li>
+        );
+      }
+    });
+
+  // 🔹 公車 ➜ 高鐵邏輯
+  } else if (transportRoute === 'bus-to-hsr') {
+  filtered201.forEach(depTime => {
+    const { arriveHSR } = calcStopTimes(depTime, '201');
+    const arriveHSRMinutes = timeToMinutes(arriveHSR);
+
+    const availableTrains = thsrTimetable.filter(train => {
+      const stops = Array.isArray(train.GeneralTimetable?.StopTimes) ? train.GeneralTimetable.StopTimes : [];
+      const yunlinIndex = stops.findIndex(s => s.StationName?.Zh_tw === '雲林');
+      const destIndex = stops.findIndex(s => s.StationName?.Zh_tw === destination);
+
+      if (yunlinIndex === -1 || destIndex === -1 || yunlinIndex >= destIndex) return false;
+
+      const depFromYunlin = stops[yunlinIndex]?.DepartureTime;
+      return depFromYunlin && timeToMinutes(depFromYunlin) >= arriveHSRMinutes;
+    });
+
+    if (availableTrains.length > 0) {
+      const train = availableTrains[0]; // 最近可搭乘高鐵
+      const stops = Array.isArray(train.GeneralTimetable?.StopTimes) ? train.GeneralTimetable.StopTimes : [];
+      const yunlinStop = stops.find(s => s.StationName?.Zh_tw === '雲林');
+      const destStop = stops.find(s => s.StationName?.Zh_tw === destination);
+
+      const travelTime = formatTravelTime(depTime, destStop?.ArrivalTime ?? '-');
+      const color = getColorBasedOnTimeDifference(time, depTime);
+      const trainNo = train.GeneralTimetable?.GeneralTrainInfo?.TrainNo ?? '無資料';
+
+      formattedResults.push(
+        <li key={`hsr-${trainNo}-${depTime}`} style={{ color }}>
+          201號公車 - 雲科大發車: {depTime}，抵達高鐵雲林站: {arriveHSR}<br />
+          搭乘高鐵 {trainNo}，雲林出發: {yunlinStop?.DepartureTime ?? '無資料'}，抵達 {destination}: {destStop?.ArrivalTime ?? '無資料'}，車程: {travelTime}
+        </li>
+      );
+    }
+  });
+}
+
+
+  setResults(formattedResults.length > 0 ? formattedResults : [<li key="no-data">當日無後續車次</li>]);
+  setCurrentPage(1);
+  
+
+};
+
+
+
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentResults = results.slice(indexOfFirstItem, indexOfLastItem);
@@ -227,7 +260,7 @@ export default function Home() {
 
           <label>車站：</label>
           <select value={destination} onChange={e => setDestination(e.target.value)}>
-            {(transportRoute === 'bus-to-train' ? TRA_DESTINATIONS : HSR_DESTINATIONS).map((item, i) => (
+            {(transportRoute === 'bus-to-train' ? TRA_DESTINATIONS : hsrStations.map(s => s.StationName.Zh_tw)).map((item, i) => (
               <option key={i} value={item}>{item}</option>
             ))}
           </select>
@@ -237,7 +270,7 @@ export default function Home() {
       </ModernCard>
 
       {results.length > 0 && (
-        <ModernCard title="查詢結果" footer={`第 ${currentPage} 頁，共 ${totalPages} 頁`}>
+        <ModernCard title="查詢結果" footer={'第 ' + currentPage + ' 頁，共 ' + totalPages + ' 頁'}>
           <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
               {currentResults}
@@ -257,3 +290,5 @@ export default function Home() {
     </main>
   );
 }
+
+
